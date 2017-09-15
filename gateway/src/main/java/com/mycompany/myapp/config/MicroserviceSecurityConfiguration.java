@@ -1,43 +1,59 @@
 package com.mycompany.myapp.config;
 
 import com.mycompany.myapp.security.AuthoritiesConstants;
-
-import io.github.jhipster.config.JHipsterProperties;
-
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.cloud.client.discovery.DiscoveryClient;
-import org.springframework.cloud.client.loadbalancer.RestTemplateCustomizer;
+import org.springframework.boot.autoconfigure.security.oauth2.client.EnableOAuth2Sso;
+import org.springframework.boot.autoconfigure.security.oauth2.resource.AuthoritiesExtractor;
+import org.springframework.boot.autoconfigure.security.oauth2.resource.PrincipalExtractor;
+import org.springframework.boot.autoconfigure.security.oauth2.resource.ResourceServerProperties;
+import org.springframework.boot.autoconfigure.security.oauth2.resource.UserInfoTokenServices;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.config.annotation.web.configuration.EnableResourceServer;
-import org.springframework.security.oauth2.config.annotation.web.configuration.ResourceServerConfigurerAdapter;
 import org.springframework.security.oauth2.provider.token.TokenStore;
 import org.springframework.security.oauth2.provider.token.store.JwtAccessTokenConverter;
 import org.springframework.security.oauth2.provider.token.store.JwtTokenStore;
+import org.springframework.security.web.util.matcher.RequestHeaderRequestMatcher;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Optional;
 
 @Configuration
+@EnableOAuth2Sso
 @EnableResourceServer
 @EnableGlobalMethodSecurity(prePostEnabled = true, securedEnabled = true)
-public class MicroserviceSecurityConfiguration extends ResourceServerConfigurerAdapter {
+public class MicroserviceSecurityConfiguration extends WebSecurityConfigurerAdapter {
 
-    private final JHipsterProperties jHipsterProperties;
+    private final ResourceServerProperties resourceServerProperties;
 
-    private final DiscoveryClient discoveryClient;
+    public MicroserviceSecurityConfiguration(ResourceServerProperties resourceServerProperties) {
+        this.resourceServerProperties = resourceServerProperties;
+    }
 
-    public MicroserviceSecurityConfiguration(JHipsterProperties jHipsterProperties,
-            DiscoveryClient discoveryClient) {
+    @Bean
+    @Primary
+    UserInfoTokenServices userInfoTokenServices() {
+        UserInfoTokenServices userInfoTokenServices = new UserInfoTokenServices(resourceServerProperties.getUserInfoUri(), resourceServerProperties.getClientId());
+        userInfoTokenServices.setPrincipalExtractor(principalExtractor());
+        userInfoTokenServices.setAuthoritiesExtractor(authoritiesExtractor());
+        return userInfoTokenServices;
+    }
 
-        this.jHipsterProperties = jHipsterProperties;
-        this.discoveryClient = discoveryClient;
+    PrincipalExtractor principalExtractor() {
+        return (Map<String, Object> map) -> map.get("preferred_username");
+    }
+
+    AuthoritiesExtractor authoritiesExtractor() {
+        return (Map<String, Object> map) -> Arrays.asList(() -> "NONE");
     }
 
     @Override
@@ -48,10 +64,11 @@ public class MicroserviceSecurityConfiguration extends ResourceServerConfigurerA
             .headers()
             .frameOptions()
             .disable()
-        .and()
+            .and()
             .sessionManagement()
             .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-        .and()
+            .and()
+            .requestMatcher(new RequestHeaderRequestMatcher("Authorization"))
             .authorizeRequests()
             .antMatchers("/api/profile-info").permitAll()
             .antMatchers("/api/**").authenticated()
@@ -66,28 +83,24 @@ public class MicroserviceSecurityConfiguration extends ResourceServerConfigurerA
     }
 
     @Bean
-    public JwtAccessTokenConverter jwtAccessTokenConverter(
-            @Qualifier("loadBalancedRestTemplate") RestTemplate keyUriRestTemplate) {
-
+    public JwtAccessTokenConverter jwtAccessTokenConverter() {
         JwtAccessTokenConverter converter = new JwtAccessTokenConverter();
-        converter.setVerifierKey(getKeyFromAuthorizationServer(keyUriRestTemplate));
+        converter.setVerifierKey(getKeyFromAuthorizationServer());
         return converter;
     }
 
-    @Bean
-    public RestTemplate loadBalancedRestTemplate(RestTemplateCustomizer customizer) {
-        RestTemplate restTemplate = new RestTemplate();
-        customizer.customize(restTemplate);
-        return restTemplate;
-    }
-
-    private String getKeyFromAuthorizationServer(RestTemplate keyUriRestTemplate) {
-        // Load available UAA servers
-        discoveryClient.getServices();
-        HttpEntity<Void> request = new HttpEntity<Void>(new HttpHeaders());
-        return (String) keyUriRestTemplate
-            .exchange("http://uaa/oauth/token_key", HttpMethod.GET, request, Map.class).getBody()
-            .get("value");
-
+    private String getKeyFromAuthorizationServer() {
+        return Optional.ofNullable(
+            new RestTemplate()
+                .exchange(
+                    resourceServerProperties.getJwt().getKeyUri(),
+                    HttpMethod.GET,
+                    new HttpEntity<Void>(new HttpHeaders()),
+                    Map.class
+                )
+                .getBody()
+                .get("public_key"))
+            .map(publicKey -> "-----BEGIN PUBLIC KEY-----\n" + publicKey + "\n-----END PUBLIC KEY-----")
+            .orElse(resourceServerProperties.getJwt().getKeyValue());
     }
 }

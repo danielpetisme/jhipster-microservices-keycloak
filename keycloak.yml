@@ -1,0 +1,13 @@
+version: '2'
+services:
+    keycloak:
+      image: danielpetisme/jhipster-keycloak:latest
+#        volumes:
+#            - ./realm.json:/opt/jboss/keycloak/realm.json
+      environment:
+        - KEYCLOAK_USER=admin
+        - KEYCLOAK_PASSWORD=admin
+      ports:
+        - 7070:8080
+        - 7443:8443
+        - 9990:9990

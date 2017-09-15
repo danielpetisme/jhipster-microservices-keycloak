@@ -1,5 +1,5 @@
 # ===================================================================
-# Spring Boot configuration for the "dev" profile.
+# Spring Boot configuration for the "prod" profile.
 #
 # This configuration overrides the application.yml file.
 #
@@ -21,25 +21,18 @@ eureka:
             defaultZone: http://admin:${jhipster.registry.password}@localhost:8761/eureka/
 
 spring:
-    profiles:
-        active: dev
-        include: swagger
     devtools:
         restart:
-            enabled: true
+            enabled: false
         livereload:
-            enabled: false # we use gulp + BrowserSync for livereload
-    jackson:
-        serialization.indent_output: true
+            enabled: false
     mail:
         host: localhost
         port: 25
         username:
         password:
-    messages:
-        cache-seconds: 1
     thymeleaf:
-        cache: false
+        cache: true
     zipkin: # Use the "zipkin" Maven profile to have the Spring Cloud Zipkin dependencies
         base-url: http://localhost:9411
         enabled: false
@@ -47,25 +40,9 @@ spring:
             discovery:
                 enabled: true
 
-security:
-    oauth2:
-        client:
-            accessTokenUri: http://localhost:7070/auth/realms/jhipster/protocol/openid-connect/token
-            userAuthorizationUri: http://localhost:7070/auth/realms/jhipster/protocol/openid-connect/auth
-            clientId: internal
-            clientSecret: internal
-            tokenName: access_token
-            scope: openid
-            authenticationScheme: header
-            clientAuthenticationScheme: header
-        resource:
-            user-info-uri: http://localhost:7070/auth/realms/jhipster/protocol/openid-connect/userinfo
-            jwt:
-                keyUri: http://localhost:7070/auth/realms/jhipster
-
 # ===================================================================
 # To enable SSL, generate a certificate using:
-# keytool -genkey -alias gateway -storetype PKCS12 -keyalg RSA -keysize 2048 -keystore keystore.p12 -validity 3650
+# keytool -genkey -alias service2 -storetype PKCS12 -keyalg RSA -keysize 2048 -keystore keystore.p12 -validity 3650
 #
 # You can also use Let's Encrypt:
 # https://maximilian-boehm.com/hp2121/Create-a-Java-Keystore-JKS-from-Let-s-Encrypt-Certificates.htm
@@ -73,15 +50,19 @@ security:
 # Then, modify the server.ssl properties so your "server" configuration looks like:
 #
 # server:
-#    port: 8443
+#    port: 443
 #    ssl:
 #        key-store: keystore.p12
 #        key-store-password: <your-password>
 #        keyStoreType: PKCS12
-#        keyAlias: gateway
+#        keyAlias: service2
 # ===================================================================
 server:
-    port: 8080
+    port: 8082
+    compression:
+        enabled: true
+        mime-types: text/html,text/xml,text/plain,text/css, application/javascript, application/json
+        min-response-size: 1024
 
 # ===================================================================
 # JHipster specific properties
@@ -90,38 +71,27 @@ server:
 # ===================================================================
 
 jhipster:
-    gateway:
-        rate-limiting:
-            enabled: false
-            limit: 100000
-            duration-in-seconds: 3600
-        authorized-microservices-endpoints: # Access Control Policy, if left empty for a route, all endpoints will be accessible
-            app1: /api,/v2/api-docs # recommended dev configuration
     http:
         version: V_1_1 # To use HTTP/2 you will need SSL support (see above the "server.ssl" configuration)
-    cache: # Cache configuration
-        hazelcast: # Hazelcast distributed cache
-            time-to-live-seconds: 3600
-            backup-count: 1
-    # CORS is only enabled by default with the "dev" profile, so BrowserSync can access the API
-    cors:
-        allowed-origins: "*"
-        allowed-methods: GET, PUT, POST, DELETE, OPTIONS
-        allowed-headers: "*"
-        exposed-headers:
-        allow-credentials: true
-        max-age: 1800
+        cache: # Used by the CachingHttpHeadersFilter
+            timeToLiveInDays: 1461
+    security:
+        client-authorization:
+            access-token-uri: http://accounts/oauth/token
+            token-service-id: accounts
+            client-id: internal
+            client-secret: internal
     mail: # specific JHipster mail property, for standard properties see MailProperties
-        from: gateway@localhost
-        base-url: http://127.0.0.1:8080
+        from: service2@localhost
+        base-url: http://my-server-url-to-change # Modify according to your server's URL
     metrics: # DropWizard Metrics configuration, used by MetricsConfiguration
         jmx.enabled: true
-        graphite: # Use the "graphite" Maven profile to have the Graphite dependencies
+        graphite:
             enabled: false
             host: localhost
             port: 2003
-            prefix: gateway
-        prometheus: # Use the "prometheus" Maven profile to have the Prometheus dependencies
+            prefix: service2
+        prometheus:
             enabled: false
             endpoint: /prometheusMetrics
         logs: # Reports Dropwizard metrics in the logs
