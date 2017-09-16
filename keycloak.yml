@@ -2,8 +2,8 @@ version: '2'
 services:
     keycloak:
       image: danielpetisme/jhipster-keycloak:latest
-#        volumes:
-#            - ./realm.json:/opt/jboss/keycloak/realm.json
+#      volumes:
+#        - ./import:/opt/jboss/keycloak/import
       environment:
         - KEYCLOAK_USER=admin
         - KEYCLOAK_PASSWORD=admin
